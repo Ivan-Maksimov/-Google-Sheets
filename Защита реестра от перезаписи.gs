@@ -1,27 +1,38 @@
 let protectionName = `защищаемый-диапазон`; // имя основного защищаемого диапазона
-let admin = SpreadsheetApp.getActive().getOwner().getEmail(); // имя админа, владельца файла, на чьё имя будет защищён диапазон
-let sheetName = `Лист1`; // имя листа, где будут защищаться диапазоны
+let admin = SpreadsheetApp.getActive().getOwner().getEmail(); // или гугл-группа - владелец файла, на чьё имя будет защищён диапазон
+let sheetName = `Централизованные цены`; // имя листа, где будут защищаться диапазоны
 let flagColNumber = 16; // номер столбца, в котором проставляется признак - блокировать или нет диапазон
 let firstColToProtect = 1; // номер первого столбца, который будет защищён напротив ячейки с признаком
 let lastColToProtect = 15; // номер последнего столбца, который будет защищён напротив ячейки с признаком
 let numColsToProtect = 15; // число столбцов, которые будут защищены напротив ячейки с признаком
+let a1Range1 = `P:Q`; // столбцы с датами
+let rg1Name = `Даты`;
+let a1Range2 = `1:3`; // шапка таблицы
+let rg2Name = `Шапка`;
 
 
 /**
  * Функция защищает диапазон от всех кроме админа.
  * Функция нужна, т.к. стандартный метод защиты добавляет в редакторы всех, у кого есть доступ к таблице
  */
-function protectRange(range, targetUser, forAdminOnly) {
+function protectRange(range, targetUser, forAdminOnly, rgName) {
   let a1TargetRange = range.getA1Notation();
   Logger.log(`защищаемый диапазон = ${a1TargetRange}`);
   let protection = range.protect();
+  if (rgName) {
+    protection.setDescription(rgName);
+  } else {}
   let editors = protection.getEditors();
   editors = editors.filter(x => x.getEmail() !== admin);
   if (forAdminOnly) {} else { // в защиту диапазона добавляем и текущего пользователя
     editors = editors.filter(x => x.getEmail() !== targetUser);
   }
+  SpreadsheetApp.getUi().alert(`диапазон ${range.getA1Notation()} защищён`);
   Logger.log(`диапазон защищён от всех\nкроме ${admin} и ${targetUser}`);
   protection.removeEditors(editors);
+  if (protection.canDomainEdit()) {
+    protection.setDomainEdit(false);
+  }
 }
 
 
@@ -107,4 +118,39 @@ function onEdit(e) {
       } else {Logger.log(`Поступившая команда ${vl} не требует защищать диапазон. Ничего не делаем...`);}
     } else {Logger.log(`Изменённый диапазон ${triggerA1Range} не является целевым`);}
   } else {Logger.log(`Изменённый лист ${shName} не является целевым`);}
+}
+
+
+// запускается один раз при первом запуске нового файла
+function prepareSheet() {
+  let sp = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = sp.getSheetByName(sheetName);
+  let protections = sh.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+  let flag1 = true;
+  let flag2 = true;
+  for (i in protections) {
+    let protection = protections[i];
+    if (protection.getDescription() == rg1Name) {
+      flag1 = false;
+    }
+    if (protection.getDescription() == rg2Name) { 
+      flag2 = false;
+    }
+  }
+  if (flag1) {
+    let rg1 = sh.getRange(a1Range1);
+    protectRange(rg1, admin, true, rg1Name);
+    SpreadsheetApp.flush();
+  }
+  if (flag2) {
+    let rg2 = sh.getRange(a1Range2);
+    protectRange(rg2, admin, true, rg2Name);
+  }
+  Logger.log(`предварительные защиты настроены, файл готов к работе`);
+  SpreadsheetApp.getUi().alert(`предварительные защиты настроены, файл готов к работе`);
+}
+
+
+function onOpen() {
+  let ui = SpreadsheetApp.getUi().createMenu(`Первый запуск`).addItem(`Начать подготовку`, `prepareSheet`).addToUi();
 }
